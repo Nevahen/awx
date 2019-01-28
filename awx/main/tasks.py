@@ -46,6 +46,7 @@ from crum import impersonate
 from awx import __version__ as awx_application_version
 from awx.main.constants import CLOUD_PROVIDERS, PRIVILEGE_ESCALATION_METHODS, STANDARD_INVENTORY_UPDATE_ENV
 from awx.main.access import access_registry
+<<<<<<< HEAD
 from awx.main.models import (
     Schedule, TowerScheduleState, Instance, InstanceGroup,
     UnifiedJob, Notification,
@@ -55,6 +56,10 @@ from awx.main.models import (
     JobEvent, ProjectUpdateEvent, InventoryUpdateEvent, AdHocCommandEvent, SystemJobEvent,
     build_safe_env
 )
+=======
+from awx.main import analytics
+from awx.main.models import * # noqa
+>>>>>>> add a minimal framework for generating analytics/metrics
 from awx.main.constants import ACTIVE_STATES
 from awx.main.exceptions import AwxTaskError
 from awx.main.queue import CallbackQueueDispatcher
@@ -318,6 +323,19 @@ def send_notifications(notification_list, job_id=None):
                 notification.save(update_fields=update_fields)
             except Exception:
                 logger.exception('Error saving notification {} result.'.format(notification.id))
+
+
+@task()
+def gather_analytics():
+    if settings.PENDO_TRACKING_STATE == 'off':
+        return
+    try:
+        tgz = analytics.gather()
+        logger.debug('gathered analytics: {}'.format(tgz))
+        analytics.ship(tgz)
+    finally:
+        if os.path.exists(tgz):
+            os.remove(tgz)
 
 
 @task()
