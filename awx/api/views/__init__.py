@@ -318,6 +318,39 @@ class DashboardJobsGraphView(APIView):
         return Response(dashboard_data)
 
 
+class MetricsView(APIView):
+
+    view_name = _("Metrics")
+    swagger_topic = 'Metrics'
+    
+    def get(self, request, format=None):
+        
+        # Temporary Imports
+        from awx.main.models.organization import UserSessionMembership
+        from django.contrib.sessions.models import Session
+        
+        ''' Show Metrics Details '''
+        data = OrderedDict()
+        
+        total_sessions = Session.objects.all().count()
+        api_sessions = UserSessionMembership.objects.all().count()
+        channels_sessions = total_sessions - api_sessions
+        data['sessions'] = {'active_sessions': total_sessions,
+                        'websocket_sessions': channels_sessions,
+                        'api_sessions': api_sessions}
+                        
+        user_inventory = get_user_queryset(request.user, Inventory)
+        
+        user_jobs = get_user_queryset(request.user, Job)
+        user_failed_jobs = user_jobs.filter(failed=True)
+        data['jobs'] = {'url': reverse('api:job_list', request=request),
+                        'failure_url': reverse('api:job_list', request=request) + "?failed=True",
+                        'total': user_jobs.count(),
+                        'failed': user_failed_jobs.count()}
+        
+        return Response(data)
+
+
 class InstanceList(ListAPIView):
 
     view_name = _("Instances")
