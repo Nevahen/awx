@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('main', '0056_v350_custom_venv_history'),
+        ('main', '0057_v350_remove_become_method_type'),
     ]
 
     operations = [
