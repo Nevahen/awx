@@ -323,32 +323,47 @@ class MetricsView(APIView):
     view_name = _("Metrics")
     swagger_topic = 'Metrics'
     
+    renderer_classes = [renderers.BrowsableAPIRenderer,
+                        renderers.PlainTextRenderer,
+                        JSONRenderer]
+    
     def get(self, request, format=None):
+        ''' Show Metrics Details '''
         
         # Temporary Imports
         from awx.main.models.organization import UserSessionMembership
         from django.contrib.sessions.models import Session
+
+        def _prepare_data(data):
+            metrics = ''
+            for metric in data:
+                metrics += metric + '\n'
+            return metrics
         
-        ''' Show Metrics Details '''
-        data = OrderedDict()
+        # Add active/expired, or only query active sessions
         
         total_sessions = Session.objects.all().count()
+        active_sessions = Session.objects.filter(expire_date__gte=now()).count()
+        
+        
         api_sessions = UserSessionMembership.objects.all().count()
         channels_sessions = total_sessions - api_sessions
-        data['sessions'] = {'active_sessions': total_sessions,
-                        'websocket_sessions': channels_sessions,
-                        'api_sessions': api_sessions}
-                        
-        user_inventory = get_user_queryset(request.user, Inventory)
+        expired_sessions = total_sessions - active_sessions
         
-        user_jobs = get_user_queryset(request.user, Job)
-        user_failed_jobs = user_jobs.filter(failed=True)
-        data['jobs'] = {'url': reverse('api:job_list', request=request),
-                        'failure_url': reverse('api:job_list', request=request) + "?failed=True",
-                        'total': user_jobs.count(),
-                        'failed': user_failed_jobs.count()}
+        data = []
+        data.append("# HELP awx_sessions_active counter A count of active sessions.")
+        data.append("# TYPE awx_sessions_active counter")
+        data.append("sessions.active_sessions {0} ".format(total_sessions))
+        data.append("# TYPE awx_sessions_websocket counter")
+        data.append("sessions.websocket_sessions {0} ".format(channels_sessions))
+        data.append("# TYPE awx_sessions_api counter")
+        data.append("sessions.api_sessions {0} ".format(api_sessions))
+        data.append("# TYPE sessions.active_sessions counter")
+        data.append("sessions.active_sessions {0}".format(active_sessions))
+        data.append("# TYPE sessions.expired_sessions counter")
+        data.append("sessions.expired_sessions {0}".format(expired_sessions))
         
-        return Response(data)
+        return Response(_prepare_data(data))
 
 
 class InstanceList(ListAPIView):

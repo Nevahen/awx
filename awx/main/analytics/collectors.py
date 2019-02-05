@@ -2,12 +2,15 @@ import os.path
 
 from django.db.models import Count
 from django.conf import settings
+from django.utils.timezone import now
 
 from awx.conf.license import get_license
 from awx.main.utils import (get_awx_version, get_ansible_version,
                             get_custom_venv_choices, camelcase_to_underscore)
 from awx.main import models
+from django.contrib.sessions.models import Session
 from awx.main.analytics import register
+
 
 
 #
@@ -34,7 +37,9 @@ def config(since):
         'system_uuid': settings.SYSTEM_UUID,
         'version': get_awx_version(),
         'ansible_version': get_ansible_version(),
-        'license_type': license_data.get('license_type', 'UNLICENSED')
+        'license_type': license_data.get('license_type', 'UNLICENSED'),
+        'authentication_backends': settings.AUTHENTICATION_BACKENDS,
+        'logging_aggregators': settings.LOG_AGGREGATOR_LOGGERS
     }
 
 
@@ -52,6 +57,26 @@ def counts(since):
         v for v in venvs
         if os.path.basename(v.rstrip('/')) != 'ansible'
     ])
+
+    active_sessions = Session.objects.filter(expire_date__gte=now()).count()
+    api_sessions = models.UserSessionMembership.objects.select_related('session').filter(session__expire_date__gte=now()).count()
+    channels_sessions = active_sessions - api_sessions
+    counts['active_sessions'] = active_sessions
+    counts['api_sessions'] = api_sessions
+    counts['channels_sessions'] = channels_sessions
+    
+    return counts
+    
+    
+@register('org_counts')
+def org_counts(since):
+    counts = {}
+    
+    for org in models.Organization.objects.all():
+        counts[org.name] = {'id': org.id,
+                            'users': models.User.objects.filter(roles=org.member_role).count(),
+                            'teams': org.teams.count()}
+    
     return counts
 
 

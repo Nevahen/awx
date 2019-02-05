@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('main', '0057_v350_remove_become_method_type'),
+        ('main', '0060_v350_update_schedule_uniqueness_constraint'),
     ]
 
     operations = [
