@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('main', '0060_v350_update_schedule_uniqueness_constraint'),
+        ('main', '0061_v350_track_native_credentialtype_source'),
     ]
 
     operations = [

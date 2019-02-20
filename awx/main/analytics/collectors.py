@@ -58,6 +58,9 @@ def counts(since):
         if os.path.basename(v.rstrip('/')) != 'ansible'
     ])
 
+    counts['smart_inventories'] = models.Inventory.objects.filter(kind='smart').count(),
+    counts['normal_inventories'] = models.Inventory.objects.filter(kind='').count(),
+
     active_sessions = Session.objects.filter(expire_date__gte=now()).count()
     api_sessions = models.UserSessionMembership.objects.select_related('session').filter(session__expire_date__gte=now()).count()
     channels_sessions = active_sessions - api_sessions
@@ -75,8 +78,20 @@ def org_counts(since):
     for org in models.Organization.objects.all():
         counts[org.name] = {'id': org.id,
                             'users': models.User.objects.filter(roles=org.member_role).count(),
-                            'teams': org.teams.count()}
+                            'teams': org.teams.count()
+                            }
+    return counts
     
+@register('inventory_counts')
+def inventory_counts(since):
+    counts = {}
+    
+    for inv in models.Inventory.objects.all():
+        counts[inv.name] = {'id': inv.id,
+                            'kind': inv.kind,
+                            'hosts': inv.hosts.count(),
+                            'sources': models.InventorySource.objects.filter(inventory=inv).count() 
+                            }
     return counts
 
 
