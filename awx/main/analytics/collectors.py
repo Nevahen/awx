@@ -49,7 +49,8 @@ def counts(since):
     for cls in (models.Organization, models.Team, models.User,
                 models.Inventory, models.Credential, models.Project,
                 models.JobTemplate, models.WorkflowJobTemplate, models.Host,
-                models.Schedule, models.CustomInventoryScript):
+                models.Schedule, models.CustomInventoryScript,
+                models.NotificationTemplate):
         counts[camelcase_to_underscore(cls.__name__)] = cls.objects.count()
 
     venvs = get_custom_venv_choices()
@@ -81,6 +82,17 @@ def org_counts(since):
                             'teams': org.teams.count()
                             }
     return counts
+    
+    
+@register('cred_type_counts')
+def cred_type_counts(since):
+    counts = {}
+    for cred_type in models.CredentialType.objects.all():  
+        counts[cred_type.name] = {'id': cred_type.id,
+                                  'credential_count': cred_type.credentials.count()
+                                  }
+    return counts
+    
     
 @register('inventory_counts')
 def inventory_counts(since):
