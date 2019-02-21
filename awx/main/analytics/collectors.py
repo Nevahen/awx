@@ -32,16 +32,18 @@ from awx.main.analytics import register
 
 @register('config')
 def config(since):
-    license_data = get_license(show_key=False)
+    license_info = get_license(show_key=False)
     return {
         'system_uuid': settings.SYSTEM_UUID,
-        'version': get_awx_version(),
+        'tower_url_base': settings.TOWER_URL_BASE,
+        'tower_version': get_awx_version(),
         'ansible_version': get_ansible_version(),
-        'license_type': license_data.get('license_type', 'UNLICENSED'),
+        'license_type': license_info.get('license_type', 'UNLICENSED'),
+        'free_instances': license_info.get('free instances', 0),
+        'license_expiry': license_info.get('time_remaining', 0),
         'authentication_backends': settings.AUTHENTICATION_BACKENDS,
         'logging_aggregators': settings.LOG_AGGREGATOR_LOGGERS
     }
-
 
 @register('counts')
 def counts(since):
@@ -59,8 +61,9 @@ def counts(since):
         if os.path.basename(v.rstrip('/')) != 'ansible'
     ])
 
-    counts['smart_inventories'] = models.Inventory.objects.filter(kind='smart').count(),
-    counts['normal_inventories'] = models.Inventory.objects.filter(kind='').count(),
+    counts['active_host_count'] = models.Host.objects.active_count()
+    counts['smart_inventories'] = models.Inventory.objects.filter(kind='smart').count()
+    counts['normal_inventories'] = models.Inventory.objects.filter(kind='').count()
 
     active_sessions = Session.objects.filter(expire_date__gte=now()).count()
     api_sessions = models.UserSessionMembership.objects.select_related('session').filter(session__expire_date__gte=now()).count()
@@ -75,11 +78,10 @@ def counts(since):
 @register('org_counts')
 def org_counts(since):
     counts = {}
-    
-    for org in models.Organization.objects.all():
-        counts[org.name] = {'id': org.id,
-                            'users': models.User.objects.filter(roles=org.member_role).count(),
-                            'teams': org.teams.count()
+    for org in models.Organization.objects.annotate(num_users=Count('member_role__members', distinct=True), num_teams=Count('teams', distinct=True)):
+        counts[org.id] = {'id': org.name,
+                            'users': org.num_users,
+                            'teams': org.num_teams
                             }
     return counts
     
@@ -87,22 +89,22 @@ def org_counts(since):
 @register('cred_type_counts')
 def cred_type_counts(since):
     counts = {}
-    for cred_type in models.CredentialType.objects.all():  
-        counts[cred_type.name] = {'id': cred_type.id,
-                                  'credential_count': cred_type.credentials.count()
-                                  }
+    for cred_type in models.CredentialType.objects.annotate(num_credentials=Count('credentials', distinct=True)):  
+        counts[cred_type.id] = {'id': cred_type.name,
+                                  'credential_count': cred_type.num_credentials
+                                }
     return counts
     
     
 @register('inventory_counts')
 def inventory_counts(since):
     counts = {}
-    
-    for inv in models.Inventory.objects.all():
-        counts[inv.name] = {'id': inv.id,
+    from django.db.models import Count
+    for inv in models.Inventory.objects.annotate(num_sources=Count('inventory_sources', distinct=True), num_hosts=Count('hosts', distinct=True)):
+        counts[inv.id] = {'id': inv.name,
                             'kind': inv.kind,
-                            'hosts': inv.hosts.count(),
-                            'sources': models.InventorySource.objects.filter(inventory=inv).count() 
+                            'hosts': inv.num_hosts,
+                            'sources': inv.num_sources
                             }
     return counts
 

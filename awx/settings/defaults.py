@@ -5,6 +5,7 @@ import os
 import re  # noqa
 import sys
 from datetime import timedelta
+from celery.schedules import crontab
 
 # global settings
 from django.conf import global_settings
@@ -486,7 +487,7 @@ CELERYBEAT_SCHEDULE = {
     },
     'gather_analytics': {
         'task': 'awx.main.tasks.gather_analytics',
-        'schedule': timedelta(days=1)
+        'schedule': crontab(hour='0')
     },
     'task_manager': {
         'task': 'awx.main.scheduler.tasks.run_task_manager',

@@ -10,7 +10,7 @@ import subprocess
 
 from django.conf import settings
 from django.utils.encoding import smart_str
-from django.utils.timezone import now
+from django.utils.timezone import now, timedelta
 from rest_framework.exceptions import PermissionDenied
 
 from awx.main.models import Job
@@ -59,12 +59,20 @@ def gather(dest=None, module=None):
     :pararm module: the module to search for registered analytic collector
                     functions; defaults to awx.main.analytics.collectors
     """
+    import time                 # TODO: Remove this
+    start_time = time.time()    # TODO: Remove this
+    
     run_now = now()
     state = TowerAnalyticsState.get_solo()
     last_run = state.last_run
     logger.debug("Last analytics run was: {}".format(last_run))
     state.last_run = run_now
     state.save()
+    
+    INSIGHTS_RUN_INTERVAL = 1 # in hours        # TODO: add setting to CTINT
+    last_scheduled_run = now() - timedelta(hours=INSIGHTS_RUN_INTERVAL)
+    if last_run < last_scheduled_run:
+        last_run = last_scheduled_run
 
     if _valid_license() is False:
         return
@@ -97,6 +105,7 @@ def gather(dest=None, module=None):
         dest
     )
     shutil.rmtree(dest)
+    print("Analytics Time --- %s seconds ---" % (time.time() - start_time))  # TODO: Remove this
     return tgz
 
 
