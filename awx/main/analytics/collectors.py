@@ -69,8 +69,8 @@ def counts(since):
     api_sessions = models.UserSessionMembership.objects.select_related('session').filter(session__expire_date__gte=now()).count()
     channels_sessions = active_sessions - api_sessions
     counts['active_sessions'] = active_sessions
-    counts['api_sessions'] = api_sessions
-    counts['channels_sessions'] = channels_sessions
+    counts['active_api_sessions'] = api_sessions
+    counts['active_channels_sessions'] = channels_sessions
     
     return counts
     
@@ -78,8 +78,8 @@ def counts(since):
 @register('org_counts')
 def org_counts(since):
     counts = {}
-    for org in models.Organization.objects.annotate(num_users=Count('member_role__members', distinct=True), num_teams=Count('teams', distinct=True)):
-        counts[org.id] = {'id': org.name,
+    for org in models.Organization.objects.annotate(num_users=Count('member_role__members', distinct=True), num_teams=Count('teams', distinct=True)):  # Use .values to make a dict of only the fields we can about where
+        counts[org.id] = {'name': org.name,
                             'users': org.num_users,
                             'teams': org.num_teams
                             }
@@ -90,7 +90,7 @@ def org_counts(since):
 def cred_type_counts(since):
     counts = {}
     for cred_type in models.CredentialType.objects.annotate(num_credentials=Count('credentials', distinct=True)):  
-        counts[cred_type.id] = {'id': cred_type.name,
+        counts[cred_type.id] = {'name': cred_type.name,
                                   'credential_count': cred_type.num_credentials
                                 }
     return counts
@@ -101,7 +101,7 @@ def inventory_counts(since):
     counts = {}
     from django.db.models import Count
     for inv in models.Inventory.objects.annotate(num_sources=Count('inventory_sources', distinct=True), num_hosts=Count('hosts', distinct=True)):
-        counts[inv.id] = {'id': inv.name,
+        counts[inv.id] = {'name': inv.name,
                             'kind': inv.kind,
                             'hosts': inv.num_hosts,
                             'sources': inv.num_sources

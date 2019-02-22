@@ -69,12 +69,12 @@ def gather(dest=None, module=None):
     state.last_run = run_now
     state.save()
     
-    INSIGHTS_RUN_INTERVAL = 1 # in hours        # TODO: add setting to CTINT
-    last_scheduled_run = now() - timedelta(hours=INSIGHTS_RUN_INTERVAL)
-    if last_run < last_scheduled_run:
-        last_run = last_scheduled_run
+    max_interval = now() - timedelta(days=7)
+    if last_run < max_interval or not last_run:
+        last_run = max_interval
 
     if _valid_license() is False:
+        logger.exception("Invalid License provided, or No License Provided")
         return
 
     if module is None:
@@ -97,7 +97,7 @@ def gather(dest=None, module=None):
     # can't use isoformat() since it has colons, which GNU tar doesn't like
     tarname = '_'.join([
         settings.SYSTEM_UUID,
-        run_now.strftime('%Y-%m-%d-%H%M%S')
+        run_now.strftime('%Y-%m-%d-%H%M%S%z')
     ])
     tgz = shutil.make_archive(
         os.path.join(os.path.dirname(dest), tarname),
