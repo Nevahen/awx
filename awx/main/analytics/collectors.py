@@ -71,7 +71,7 @@ def counts(since):
     counts['active_sessions'] = active_sessions
     counts['active_api_sessions'] = api_sessions
     counts['active_channels_sessions'] = channels_sessions
-    
+    counts['running_jobs'] = models.Job.objects.filter(status='running').count()
     return counts
     
     
@@ -100,7 +100,7 @@ def cred_type_counts(since):
 def inventory_counts(since):
     counts = {}
     from django.db.models import Count
-    for inv in models.Inventory.objects.annotate(num_sources=Count('inventory_sources', distinct=True), num_hosts=Count('hosts', distinct=True)):
+    for inv in models.Inventory.objects.annotate(num_sources=Count('inventory_sources', distinct=True), num_hosts=Count('hosts', distinct=True)).only('id', 'name', 'kind'):
         counts[inv.id] = {'name': inv.name,
                             'kind': inv.kind,
                             'hosts': inv.num_hosts,
@@ -119,4 +119,40 @@ def projects_by_scm_type(since):
         count=Count('scm_type')
     ).order_by('scm_type'):
         counts[result['scm_type'] or 'manual'] = result['count']
+    return counts
+
+
+@register('job_counts')   #TODO: evaluate if we want this (was not an ask)  Also, may think about annotating rather than grabbing objects for efficiency (even though there will likely be < 100 instances)
+def job_counts(since):
+    counts = {}
+    
+
+    counts['total_jobs'] = models.UnifiedJob.objects.all().count()
+    for instance in models.Instance.objects.all():
+        counts[instance.id] = {'uuid': instance.uuid,
+                                'jobs_total': instance.jobs_total,       # this is _all_ jobs run by that node
+                                'jobs_running': instance.jobs_running,   # this is jobs in running & waiting state
+                                }
+        jobs_running = models.UnifiedJob.objects.filter(execution_node=instance, status__in=('running', 'waiting',)).count()
+        jobs_total = models.UnifiedJob.objects.filter(execution_node=instance).count()
+        
+        
+    counts['total_jobs'] = models.UnifiedJob.objects.annotate(running_jobs=)
+    for instance in models.Instance.objects.all():
+        counts[instance.id] = {'uuid': instance.uuid,
+                                'jobs_total': instance.jobs_total,       # this is _all_ jobs run by that node
+                                'jobs_running': instance.jobs_running,   # this is jobs in running & waiting state
+                                }
+        jobs_running = models.UnifiedJob.objects.filter(execution_node=instance, status__in=('running', 'waiting',)).count()
+        jobs_total = models.UnifiedJob.objects.filter(execution_node=instance).count()
+        
+    return counts
+    
+    
+    
+@register('jobs')
+def jobs(since):
+    counts = {}
+    jobs = models.Job.objects.filter(created__gt=since)
+    counts['latest_jobs'] = models.Job.objects.filter(created__gt=since).count()
     return counts
