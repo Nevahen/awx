@@ -123,29 +123,36 @@ def projects_by_scm_type(since):
 
 
 @register('job_counts')   #TODO: evaluate if we want this (was not an ask)  Also, may think about annotating rather than grabbing objects for efficiency (even though there will likely be < 100 instances)
-def job_counts(since):
+def job_counts(since):    #TODO: Optimize -- for example, all of these are going to need to be restrained to the last 24 hours/INSIGHTS_SCHEDULE
     counts = {}
-    
-
     counts['total_jobs'] = models.UnifiedJob.objects.all().count()
+    counts['successful_jobs'] = models.UnifiedJob.objects.filter(status='successful').count()
+    counts['cancelled_jobs'] = models.UnifiedJob.objects.filter(status='canceled').count()
+    counts['failed_jobs'] = models.UnifiedJob.objects.filter(status='failed').count()               
+    counts['error_jobs'] = models.UnifiedJob.objects.filter(status='error').count()                  # Do we also want to include error, new, pending, waiting, running?
+    counts['new_jobs'] = models.UnifiedJob.objects.filter(status='new').count()                  # Also, how much of this do we want `per instance`
+    counts['pending_jobs'] = models.UnifiedJob.objects.filter(status='pending').count()
+    counts['waiting_jobs'] = models.UnifiedJob.objects.filter(status='waiting').count()
+    counts['running_jobs'] = models.UnifiedJob.objects.filter(status='running').count()
     for instance in models.Instance.objects.all():
         counts[instance.id] = {'uuid': instance.uuid,
                                 'jobs_total': instance.jobs_total,       # this is _all_ jobs run by that node
                                 'jobs_running': instance.jobs_running,   # this is jobs in running & waiting state
+                                'launch_type': {'manual': models.UnifiedJob.objects.filter(launch_type='manual').count(),           # I can definitely condense this some more
+                                                'relaunch': models.UnifiedJob.objects.filter(launch_type='relaunch').count(),
+                                                'scheduled': models.UnifiedJob.objects.filter(launch_type='scheduled').count(),
+                                                'callback': models.UnifiedJob.objects.filter(launch_type='callback').count(),
+                                                'dependency': models.UnifiedJob.objects.filter(launch_type='dependency').count(),
+                                                'sync': models.UnifiedJob.objects.filter(launch_type='workflow').count(),
+                                                'scm': models.UnifiedJob.objects.filter(launch_type='scm').count()
+                                                }
                                 }
-        jobs_running = models.UnifiedJob.objects.filter(execution_node=instance, status__in=('running', 'waiting',)).count()
-        jobs_total = models.UnifiedJob.objects.filter(execution_node=instance).count()
-        
-        
-    counts['total_jobs'] = models.UnifiedJob.objects.annotate(running_jobs=)
-    for instance in models.Instance.objects.all():
-        counts[instance.id] = {'uuid': instance.uuid,
-                                'jobs_total': instance.jobs_total,       # this is _all_ jobs run by that node
-                                'jobs_running': instance.jobs_running,   # this is jobs in running & waiting state
-                                }
-        jobs_running = models.UnifiedJob.objects.filter(execution_node=instance, status__in=('running', 'waiting',)).count()
-        jobs_total = models.UnifiedJob.objects.filter(execution_node=instance).count()
-        
+                                
+        '''
+        # These will later be used to optimize the jobs_running and jobs_total python properties ^^
+            jobs_running = models.UnifiedJob.objects.filter(execution_node=instance, status__in=('running', 'waiting',)).count()
+            jobs_total = models.UnifiedJob.objects.filter(execution_node=instance).count()
+        '''
     return counts
     
     
