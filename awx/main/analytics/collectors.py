@@ -138,6 +138,18 @@ def job_counts(since):    # TODO: Optimize -- for example, all of these are goin
     counts['pending_jobs'] = models.UnifiedJob.objects.filter(status='pending').count()
     counts['waiting_jobs'] = models.UnifiedJob.objects.filter(status='waiting').count()
     counts['running_jobs'] = models.UnifiedJob.objects.filter(status='running').count()
+                                
+        
+    # These will later be used to optimize the jobs_running and jobs_total python properties ^^
+    # jobs_running = models.UnifiedJob.objects.filter(execution_node=instance, status__in=('running', 'waiting',)).count()
+    # jobs_total = models.UnifiedJob.objects.filter(execution_node=instance).count()
+        
+    return counts
+    
+    
+@register('job_counts_instance')
+def job_counts_instance(since):
+    counts = {}
     for instance in models.Instance.objects.all():
         counts[instance.id] = {'uuid': instance.uuid,
                                'jobs_total': instance.jobs_total,       # this is _all_ jobs run by that node
@@ -151,14 +163,7 @@ def job_counts(since):    # TODO: Optimize -- for example, all of these are goin
                                                'scm': models.UnifiedJob.objects.filter(launch_type='scm').count()
                                                }
                                }
-                                
-        
-    # These will later be used to optimize the jobs_running and jobs_total python properties ^^
-    # jobs_running = models.UnifiedJob.objects.filter(execution_node=instance, status__in=('running', 'waiting',)).count()
-    # jobs_total = models.UnifiedJob.objects.filter(execution_node=instance).count()
-        
     return counts
-    
     
     
 @register('jobs')
