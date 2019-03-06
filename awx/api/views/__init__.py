@@ -333,15 +333,8 @@ class MetricsView(APIView):
         # Temporary Imports
         from awx.main.models.organization import UserSessionMembership
         from django.contrib.sessions.models import Session
-
-        def _prepare_data(data):
-            metrics = ''
-            for metric in data:
-                metrics += metric + '\n'
-            return metrics
         
         # Add active/expired, or only query active sessions
-        
         total_sessions = Session.objects.all().count()
         active_sessions = Session.objects.filter(expire_date__gte=now()).count()
         
@@ -349,6 +342,9 @@ class MetricsView(APIView):
         api_sessions = UserSessionMembership.objects.all().count()
         channels_sessions = total_sessions - api_sessions
         expired_sessions = total_sessions - active_sessions
+        
+        # Placeholder data below for testing against Prometheus
+        # will ultimately reformat and re-use much of the analytics data
         
         data = []
         data.append("# HELP awx_sessions_active counter A count of active sessions.")
@@ -363,7 +359,7 @@ class MetricsView(APIView):
         data.append("# TYPE sessions.expired_sessions counter")
         data.append("sessions.expired_sessions {0}".format(expired_sessions))
         
-        return Response(_prepare_data(data))
+        return Response("\n".join(data))
 
 
 class InstanceList(ListAPIView):

@@ -61,7 +61,7 @@ def counts(since):
     ])
 
     counts['active_host_count'] = models.Host.objects.active_count()
-    counts['smart_inventories'] = models.Inventory.objects.filter(kind='smart').count()
+    counts['smart_inventories'] = models.Inventory.objects.filter(kind='smart').count()  # Combine these into an aggregate query
     counts['normal_inventories'] = models.Inventory.objects.filter(kind='').count()
 
     active_sessions = Session.objects.filter(expire_date__gte=now()).count()
@@ -139,7 +139,6 @@ def job_counts(since):    # TODO: Optimize -- for example, all of these are goin
     counts['waiting_jobs'] = models.UnifiedJob.objects.filter(status='waiting').count()
     counts['running_jobs'] = models.UnifiedJob.objects.filter(status='running').count()
                                 
-        
     # These will later be used to optimize the jobs_running and jobs_total python properties ^^
     # jobs_running = models.UnifiedJob.objects.filter(execution_node=instance, status__in=('running', 'waiting',)).count()
     # jobs_total = models.UnifiedJob.objects.filter(execution_node=instance).count()
