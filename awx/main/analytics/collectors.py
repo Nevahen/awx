@@ -1,5 +1,6 @@
 import os.path
 
+
 from django.db.models import Count
 from django.conf import settings
 from django.utils.timezone import now
@@ -12,8 +13,6 @@ from django.contrib.sessions.models import Session
 from awx.main.analytics import register
 
 
-
-#
 # This module is used to define metrics collected by awx.main.analytics.gather()
 # Each function is decorated with a key name, and should return a data
 # structure that can be serialized to JSON
@@ -27,7 +26,6 @@ from awx.main.analytics import register
 # `since`, which represents the last time analytics were gathered (some metrics
 # functions - like those that return metadata about playbook runs, may return
 # data _since_ the last report date - i.e., new data in the last 24 hours)
-#
 
 
 @register('config')
@@ -44,6 +42,7 @@ def config(since):
         'authentication_backends': settings.AUTHENTICATION_BACKENDS,
         'logging_aggregators': settings.LOG_AGGREGATOR_LOGGERS
     }
+
 
 @register('counts')
 def counts(since):
@@ -62,8 +61,7 @@ def counts(since):
     ])
 
     counts['active_host_count'] = models.Host.objects.active_count()
-    counts['smart_inventories'] = models.Inventory.objects.filter(kind='smart').count()
-    counts['normal_inventories'] = models.Inventory.objects.filter(kind='').count()
+    counts['inventories'] = dict(models.Inventory.objects.order_by().values_list('kind').annotate(Count('kind'))) # TODO: s/''/'normal'
 
     active_sessions = Session.objects.filter(expire_date__gte=now()).count()
     api_sessions = models.UserSessionMembership.objects.select_related('session').filter(session__expire_date__gte=now()).count()
@@ -71,18 +69,18 @@ def counts(since):
     counts['active_sessions'] = active_sessions
     counts['active_api_sessions'] = api_sessions
     counts['active_channels_sessions'] = channels_sessions
-    counts['running_jobs'] = models.Job.objects.filter(status='running').count()
+    counts['running_jobs'] = models.Job.objects.filter(status__in=('running', 'waiting',)).count()
     return counts
-    
+
     
 @register('org_counts')
 def org_counts(since):
     counts = {}
     for org in models.Organization.objects.annotate(num_users=Count('member_role__members', distinct=True), 
-                                                    num_teams=Count('teams', distinct=True)):  # Use .values to make a dict of only the fields we can about where
-        counts[org.id] = {'name': org.name,
-                            'users': org.num_users,
-                            'teams': org.num_teams
+                                                    num_teams=Count('teams', distinct=True)).values('name', 'id', 'num_users', 'num_teams'):
+        counts[org['id']] = {'name': org['name'],
+                            'users': org['num_users'],
+                            'teams': org['num_teams']
                             }
     return counts
     
@@ -92,7 +90,7 @@ def cred_type_counts(since):
     counts = {}
     for cred_type in models.CredentialType.objects.annotate(num_credentials=Count('credentials', distinct=True)):  
         counts[cred_type.id] = {'name': cred_type.name,
-                                  'credential_count': cred_type.num_credentials
+                                'credential_count': cred_type.num_credentials
                                 }
     return counts
     
@@ -100,14 +98,20 @@ def cred_type_counts(since):
 @register('inventory_counts')
 def inventory_counts(since):
     counts = {}
-    from django.db.models import Count
-    for inv in models.Inventory.objects.annotate(num_sources=Count('inventory_sources', distinct=True), 
+    for inv in models.Inventory.objects.filter(kind='').annotate(num_sources=Count('inventory_sources', distinct=True), 
                                                  num_hosts=Count('hosts', distinct=True)).only('id', 'name', 'kind'):
         counts[inv.id] = {'name': inv.name,
-                            'kind': inv.kind,
-                            'hosts': inv.num_hosts,
-                            'sources': inv.num_sources
-                            }
+                          'kind': inv.kind,
+                          'hosts': inv.num_hosts,
+                          'sources': inv.num_sources
+                          }
+
+    for smart_inv in models.Inventory.objects.filter(kind='smart'):
+        counts[smart_inv.id] = {'name': smart_inv.name,
+                          'kind': smart_inv.kind,
+                          'num_hosts': smart_inv.hosts.count(),
+                          'num_sources': smart_inv.inventory_sources.count()
+                          }
     return counts
 
 
@@ -124,24 +128,70 @@ def projects_by_scm_type(since):
     return counts
 
 
-@register('job_counts')
-def job_counts(since):    #TODO: Optimize -- for example, all of these are going to need to be restrained to the last 24 hours/INSIGHTS_SCHEDULE
+# @register('job_counts')
+# def job_counts(since):  # Old  #TODO: all of these are going to need to be restrained to the last 24 hours/INSIGHTS_SCHEDULE
+#     counts = {}
+#     counts['total_jobs'] = models.UnifiedJob.objects.all().count()
+#     counts['status'] = dict(models.UnifiedJob.objects.values_list('status').annotate(Count('status')))
+#     for instance in models.Instance.objects.all():
+#         counts[instance.id] = {'uuid': instance.uuid,
+#                                'jobs_running': models.UnifiedJob.objects.filter(execution_node=instance.hostname, status__in=('running', 'waiting',)).count(), # jobs in running & waiting state
+#                                'jobs_total': models.UnifiedJob.objects.filter(execution_node=instance.hostname).count(),
+#                                'launch_type': dict(models.UnifiedJob.objects.filter(execution_node=instance.hostname).values_list('launch_type').annotate(Count('launch_type')))
+#                                 }
+#     return counts
+    
+    
+@register('job_counts2')
+def job_counts2(since):  # New
     counts = {}
     counts['total_jobs'] = models.UnifiedJob.objects.all().count()
     counts['status'] = dict(models.UnifiedJob.objects.values_list('status').annotate(Count('status')))
-    for instance in models.Instance.objects.all():
-        counts[instance.id] = {'uuid': instance.uuid,
-                                'jobs_total': models.UnifiedJob.objects.filter(execution_node=instance.hostname, status__in=('running', 'waiting',)).count(),
-                                'jobs_running': models.UnifiedJob.objects.filter(execution_node=instance.hostname).count(),   # jobs in running & waiting state
-                                'launch_type': dict(models.UnifiedJob.objects.filter(execution_node=instance.hostname).values_list('launch_type').annotate(Count('launch_type')))
-                                }
+
+    # instance_counts = {}
+    # 
+    # instance_counts['launch_type'] = dict(models.UnifiedJob.objects.values_list('execution_node', 'launch_type').annotate(job_launch_type=Count('launch_type')))
+    # # instance_counts['status'] = dict(models.UnifiedJob.objects.values_list('execution_node', 'status').annotate(job_status=Count('status')))
+    # counts['all_instances'] = instance_counts
+
+    job_types = models.UnifiedJob.objects.values_list(
+        'execution_node', 'launch_type').annotate(job_launch_type=Count('launch_type'))
+
+    for job in job_types:
+        counts.setdefault(job[0], {})[job[1]] = job[2]
+        
+    job_statuses = models.UnifiedJob.objects.values_list(
+        'execution_node', 'status').annotate(job_status=Count('status'))
+
+    for job in job_statuses:
+        counts.setdefault(job[0], {})[job[1]] = job[2]
+        
+# See if we can group by status and type inside the node grouping.  ^^
+        
+
+    counts['instances'] = instance_counts
     return counts
     
-    
-    
-@register('jobs')
-def jobs(since):
-    counts = {}
-    jobs = models.Job.objects.filter(created__gt=since)
-    counts['latest_jobs'] = models.Job.objects.filter(created__gt=since).count()
-    return counts
+# 
+# @register('events_by_job')
+# def events_by_job(since):
+#     counts = {}
+#     # counts['events_by_job'] = dict(JobEvent.objects.values_list('job').annotate(Count('role')))
+#     for job in UnifiedJobTemplate.objects.filter(created__gt=since).only('name', 'id'):
+# 
+#         counts[job.id] = {'job_name': job.name,
+#                           'events': JobEvent.objects.filter(job__id=job.id).count(),
+#                           'roles': JobEvent.objects.filter(job__id=job.id).values_list('role')
+#                           }
+# 
+# 
+#     return counts
+# 
+# @register('job_events')
+# def job_events(since):
+#     counts = {}
+#     counts['latest_jobs'] = models.Job.objects.filter(created__gt=since).count()
+#     counts['job_events'] = models.JobEvents.objects.filter(create__gt=since).count()
+#     for event in JobEvents.objects.filter(create__gt=since):
+#         counts[]
+#     return counts
