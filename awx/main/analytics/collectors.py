@@ -60,16 +60,18 @@ def counts(since):
         if os.path.basename(v.rstrip('/')) != 'ansible'
     ])
 
-    counts['active_host_count'] = models.Host.objects.active_count()
-    counts['inventories'] = dict(models.Inventory.objects.order_by().values_list('kind').annotate(Count('kind'))) # TODO: s/''/'normal'
-
+    inv_counts = dict(models.Inventory.objects.order_by().values_list('kind').annotate(Count('kind')))
+    inv_counts['normal'] = inv_counts[''] # rename '' to 'normal'
+    counts['inventories'] = inv_counts
+    
+    counts['active_host_count'] = models.Host.objects.active_count()   
     active_sessions = Session.objects.filter(expire_date__gte=now()).count()
     api_sessions = models.UserSessionMembership.objects.select_related('session').filter(session__expire_date__gte=now()).count()
     channels_sessions = active_sessions - api_sessions
     counts['active_sessions'] = active_sessions
     counts['active_api_sessions'] = api_sessions
     counts['active_channels_sessions'] = channels_sessions
-    counts['running_jobs'] = models.Job.objects.filter(status__in=('running', 'waiting',)).count()
+    counts['running_jobs'] = models.UnifiedJob.objects.filter(status__in=('running', 'waiting',)).count()
     return counts
 
     
@@ -127,71 +129,50 @@ def projects_by_scm_type(since):
         counts[result['scm_type'] or 'manual'] = result['count']
     return counts
 
+@register('instance_info')   # maybe integrate this with job_instance_counts?
+def instance_info(since):
+    info = {}
+    instances = models.Instance.objects.values_list('hostname').annotate().values('uuid', 'version', 'capacity', 'cpu', 'memory', 'managed_by_policy', 'hostname')
+    for instance in instances:
+        info = {'uuid': instance['uuid'],
+                'version': instance['version'],
+                'capacity': instance['capacity'],
+                'cpu': instance['cpu'],
+                'memory': instance['memory'],
+                'managed_by_policy': instance['managed_by_policy'],
+                }
+    return info
 
-# @register('job_counts')
-# def job_counts(since):  # Old  #TODO: all of these are going to need to be restrained to the last 24 hours/INSIGHTS_SCHEDULE
-#     counts = {}
-#     counts['total_jobs'] = models.UnifiedJob.objects.all().count()
-#     counts['status'] = dict(models.UnifiedJob.objects.values_list('status').annotate(Count('status')))
-#     for instance in models.Instance.objects.all():
-#         counts[instance.id] = {'uuid': instance.uuid,
-#                                'jobs_running': models.UnifiedJob.objects.filter(execution_node=instance.hostname, status__in=('running', 'waiting',)).count(), # jobs in running & waiting state
-#                                'jobs_total': models.UnifiedJob.objects.filter(execution_node=instance.hostname).count(),
-#                                'launch_type': dict(models.UnifiedJob.objects.filter(execution_node=instance.hostname).values_list('launch_type').annotate(Count('launch_type')))
-#                                 }
-#     return counts
-    
-    
-@register('job_counts2')
-def job_counts2(since):  # New
+
+@register('job_counts')
+def job_counts(since):
     counts = {}
     counts['total_jobs'] = models.UnifiedJob.objects.all().count()
     counts['status'] = dict(models.UnifiedJob.objects.values_list('status').annotate(Count('status')))
-
-    # instance_counts = {}
-    # 
-    # instance_counts['launch_type'] = dict(models.UnifiedJob.objects.values_list('execution_node', 'launch_type').annotate(job_launch_type=Count('launch_type')))
-    # # instance_counts['status'] = dict(models.UnifiedJob.objects.values_list('execution_node', 'status').annotate(job_status=Count('status')))
-    # counts['all_instances'] = instance_counts
+    counts['launch_type'] = dict(models.UnifiedJob.objects.values_list('launch_type').annotate(Count('launch_type')))
+    
+    return counts
+    
+    
+@register('job_instance_counts')
+def job_instance_counts(since):         #TODO: all of these are going to need to be restrained to the last 24 hours/INSIGHTS_SCHEDULE
+    counts = {}
 
     job_types = models.UnifiedJob.objects.values_list(
         'execution_node', 'launch_type').annotate(job_launch_type=Count('launch_type'))
-
     for job in job_types:
         counts.setdefault(job[0], {})[job[1]] = job[2]
         
     job_statuses = models.UnifiedJob.objects.values_list(
         'execution_node', 'status').annotate(job_status=Count('status'))
-
     for job in job_statuses:
         counts.setdefault(job[0], {})[job[1]] = job[2]
         
 # See if we can group by status and type inside the node grouping.  ^^
-        
 
-    counts['instances'] = instance_counts
+    # 'jobs_running': models.UnifiedJob.objects.filter(execution_node=instance.hostname, status__in=('running', 'waiting',)).count(), # jobs in running & waiting state
+    # 'jobs_total': models.UnifiedJob.objects.filter(execution_node=instance.hostname).count(),
+    # ^^ try to get jobs_running and jobs_total per instance.  and uuid if easily possible  
+
     return counts
-    
-# 
-# @register('events_by_job')
-# def events_by_job(since):
-#     counts = {}
-#     # counts['events_by_job'] = dict(JobEvent.objects.values_list('job').annotate(Count('role')))
-#     for job in UnifiedJobTemplate.objects.filter(created__gt=since).only('name', 'id'):
-# 
-#         counts[job.id] = {'job_name': job.name,
-#                           'events': JobEvent.objects.filter(job__id=job.id).count(),
-#                           'roles': JobEvent.objects.filter(job__id=job.id).values_list('role')
-#                           }
-# 
-# 
-#     return counts
-# 
-# @register('job_events')
-# def job_events(since):
-#     counts = {}
-#     counts['latest_jobs'] = models.Job.objects.filter(created__gt=since).count()
-#     counts['job_events'] = models.JobEvents.objects.filter(create__gt=since).count()
-#     for event in JobEvents.objects.filter(create__gt=since):
-#         counts[]
-#     return counts
+

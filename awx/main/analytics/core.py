@@ -11,6 +11,7 @@ import subprocess
 from django.conf import settings
 from django.utils.encoding import smart_str
 from django.utils.timezone import now, timedelta
+from django.db import connection
 from rest_framework.exceptions import PermissionDenied
 
 from awx.main.models import Job
@@ -31,7 +32,7 @@ def _valid_license():
         logger.exception("A valid license was not found:")
         return False
     return True
-    
+
 
 def register(key):
     """
@@ -49,6 +50,40 @@ def register(key):
         return f
 
     return decorate
+
+
+def copy_events_table(path='/tmp'):
+    events_file = os.path.join(path, 'events_table.csv')
+    try:
+        write_data = open(events_file, 'w')
+        with connection.cursor() as cursor:
+            cursor.copy_expert('''COPY (SELECT main_jobevent.id, 
+                                      main_jobevent.created, 
+                                      main_jobevent.modified, 
+                                      main_jobevent.event, 
+                                      main_jobevent.failed, 
+                                      main_jobevent.changed, 
+                                      main_jobevent.uuid, 
+                                      main_jobevent.playbook, 
+                                      main_jobevent.play, 
+                                      main_jobevent.role, 
+                                      main_jobevent.task, 
+                                      main_jobevent.counter, 
+                                      main_jobevent.verbosity, 
+                                      main_jobevent.start_line, 
+                                      main_jobevent.end_line, 
+                                      main_jobevent.job_id, 
+                                      main_jobevent.host_id, 
+                                      main_jobevent.host_name, 
+                                      main_jobevent.parent_id, 
+                                      main_jobevent.parent_uuid 
+                                      FROM main_jobevent 
+                                      WHERE main_jobevent.created > NOW()- INTERVAL '1 DAY'
+                                      ORDER BY main_jobevent.id ASC) to stdout''', write_data)
+            write_data.close()
+    except Exception as e:
+        return e
+    return events_file
 
 
 def gather(dest=None, module=None):
@@ -73,10 +108,6 @@ def gather(dest=None, module=None):
     if last_run < max_interval or not last_run:
         last_run = max_interval
 
-    if settings.INSIGHTS_DATA_ENABLED:
-        logger.exception("Insights not enabled.  Analytics data not gathered.")
-        return
-
     if _valid_license() is False:
         logger.exception("Invalid License provided, or No License Provided")
         return
@@ -98,6 +129,14 @@ def gather(dest=None, module=None):
                     f.close()
                     os.remove(f.name)
 
+    post_query_time = time.time()
+    print("Analytics Total Query Time --- %s seconds ---" % (post_query_time - start_time))  # TODO: Remove this
+    
+    
+    # copies Job Events data from db as a csv
+    copy_events_table(dest)
+    print("Analytics Total DB Copy Time --- %s seconds ---" % (time.time() - post_query_time))  # TODO: Remove this
+
     # can't use isoformat() since it has colons, which GNU tar doesn't like
     tarname = '_'.join([
         settings.SYSTEM_UUID,
@@ -109,7 +148,7 @@ def gather(dest=None, module=None):
         dest
     )
     shutil.rmtree(dest)
-    print("Analytics Time --- %s seconds ---" % (time.time() - start_time))  # TODO: Remove this
+    print("Analytics Total Time --- %s seconds ---" % (time.time() - start_time))  # TODO: Remove this
     return tgz
 
 
