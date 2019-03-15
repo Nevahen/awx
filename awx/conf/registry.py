@@ -172,9 +172,12 @@ class SettingsRegistry(object):
             except Exception:
                 logger.warning('Unable to retrieve default value for setting "%s".', setting, exc_info=True)
 
-        # `PENDO_TRACKING_STATE` is disabled for the open source awx license
-        if setting == 'PENDO_TRACKING_STATE' and get_license().get('license_type') == 'open':
-            field_instance.read_only = True
+        # `PENDO_TRACKING_STATE` and `INSIGHTS_DATA_ENABLED` are disabled for the open source awx license
+        if get_license().get('license_type') == 'open':
+            if setting == 'PENDO_TRACKING_STATE':
+                field_instance.read_only = True
+            if setting == 'INSIGHTS_DATA_ENABLED':
+                field_instance.read_only = True
 
         return field_instance
 

@@ -52,40 +52,6 @@ def register(key):
     return decorate
 
 
-def copy_events_table(path='/tmp'):
-    events_file = os.path.join(path, 'events_table.csv')
-    try:
-        write_data = open(events_file, 'w')
-        with connection.cursor() as cursor:
-            cursor.copy_expert('''COPY (SELECT main_jobevent.id, 
-                                      main_jobevent.created, 
-                                      main_jobevent.modified, 
-                                      main_jobevent.event, 
-                                      main_jobevent.failed, 
-                                      main_jobevent.changed, 
-                                      main_jobevent.uuid, 
-                                      main_jobevent.playbook, 
-                                      main_jobevent.play, 
-                                      main_jobevent.role, 
-                                      main_jobevent.task, 
-                                      main_jobevent.counter, 
-                                      main_jobevent.verbosity, 
-                                      main_jobevent.start_line, 
-                                      main_jobevent.end_line, 
-                                      main_jobevent.job_id, 
-                                      main_jobevent.host_id, 
-                                      main_jobevent.host_name, 
-                                      main_jobevent.parent_id, 
-                                      main_jobevent.parent_uuid 
-                                      FROM main_jobevent 
-                                      WHERE main_jobevent.created > NOW()- INTERVAL '1 DAY'
-                                      ORDER BY main_jobevent.id ASC) to stdout''', write_data)
-            write_data.close()
-    except Exception as e:
-        return e
-    return events_file
-
-
 def gather(dest=None, module=None):
     """
     Gather all defined metrics and write them as JSON files in a .tgz
@@ -112,6 +78,9 @@ def gather(dest=None, module=None):
         logger.exception("Invalid License provided, or No License Provided")
         return
 
+    if not settings.INSIGHTS_DATA_ENABLED:
+        logger.exception("Insights Data not enabled. ")
+
     if module is None:
         from awx.main.analytics import collectors
         module = collectors
@@ -131,10 +100,9 @@ def gather(dest=None, module=None):
 
     post_query_time = time.time()
     print("Analytics Total Query Time --- %s seconds ---" % (post_query_time - start_time))  # TODO: Remove this
-    
-    
+
     # copies Job Events data from db as a csv
-    copy_events_table(dest)
+    collectors.copy_events_table(dest)
     print("Analytics Total DB Copy Time --- %s seconds ---" % (time.time() - post_query_time))  # TODO: Remove this
 
     # can't use isoformat() since it has colons, which GNU tar doesn't like

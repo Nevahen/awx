@@ -1,6 +1,6 @@
 import os.path
 
-
+from django.db import connection
 from django.db.models import Count
 from django.conf import settings
 from django.utils.timezone import now
@@ -12,21 +12,21 @@ from awx.main import models
 from django.contrib.sessions.models import Session
 from awx.main.analytics import register
 
+'''
+This module is used to define metrics collected by awx.main.analytics.gather()
+Each function is decorated with a key name, and should return a data
+structure that can be serialized to JSON
 
-# This module is used to define metrics collected by awx.main.analytics.gather()
-# Each function is decorated with a key name, and should return a data
-# structure that can be serialized to JSON
-#
-# @register('something')
-# def something(since):
-#     # the generated archive will contain a `something.json` w/ this JSON
-#     return {'some': 'json'}
-#
-# All functions - when called - will be passed a datetime.datetime object,
-# `since`, which represents the last time analytics were gathered (some metrics
-# functions - like those that return metadata about playbook runs, may return
-# data _since_ the last report date - i.e., new data in the last 24 hours)
+@register('something')
+def something(since):
+    # the generated archive will contain a `something.json` w/ this JSON
+    return {'some': 'json'}
 
+All functions - when called - will be passed a datetime.datetime object,
+`since`, which represents the last time analytics were gathered (some metrics
+functions - like those that return metadata about playbook runs, may return
+data _since_ the last report date - i.e., new data in the last 24 hours)
+'''
 
 @register('config')
 def config(since):
@@ -49,7 +49,8 @@ def counts(since):
     counts = {}
     for cls in (models.Organization, models.Team, models.User,
                 models.Inventory, models.Credential, models.Project,
-                models.JobTemplate, models.WorkflowJobTemplate, models.Host,
+                models.JobTemplate, models.WorkflowJobTemplate, 
+                models.UnifiedJob, models.Host,
                 models.Schedule, models.CustomInventoryScript,
                 models.NotificationTemplate):
         counts[camelcase_to_underscore(cls.__name__)] = cls.objects.count()
@@ -62,6 +63,7 @@ def counts(since):
 
     inv_counts = dict(models.Inventory.objects.order_by().values_list('kind').annotate(Count('kind')))
     inv_counts['normal'] = inv_counts[''] # rename '' to 'normal'
+    inv_counts.pop('')
     counts['inventories'] = inv_counts
     
     counts['active_host_count'] = models.Host.objects.active_count()   
@@ -175,4 +177,41 @@ def job_instance_counts(since):         #TODO: all of these are going to need to
     # ^^ try to get jobs_running and jobs_total per instance.  and uuid if easily possible  
 
     return counts
+
+
+# Copies Job Events from db to a .csv to be shipped
+def copy_events_table(path='/tmp/'):
+    events_file = os.path.join(path, 'events_table.csv')
+    try:
+        write_data = open(events_file2, 'w')
+        with connection.cursor() as cursor:
+            cursor.copy_expert('''COPY (SELECT main_jobevent.id, 
+                                      main_jobevent.created, 
+                                      main_jobevent.modified, 
+                                      main_jobevent.event, 
+                                      main_jobevent.failed, 
+                                      main_jobevent.changed, 
+                                      main_jobevent.uuid, 
+                                      main_jobevent.playbook, 
+                                      main_jobevent.play, 
+                                      main_jobevent.role, 
+                                      main_jobevent.task, 
+                                      main_jobevent.counter, 
+                                      main_jobevent.verbosity, 
+                                      main_jobevent.start_line, 
+                                      main_jobevent.end_line, 
+                                      main_jobevent.job_id, 
+                                      main_jobevent.host_id, 
+                                      main_jobevent.host_name, 
+                                      main_jobevent.parent_id, 
+                                      main_jobevent.parent_uuid 
+                                      FROM main_jobevent 
+                                      WHERE main_jobevent.created > NOW()- INTERVAL '1 DAY'
+                                      ORDER BY main_jobevent.id ASC) to stdout''', write_data)
+            write_data.close()
+    except Exception as e:
+        return e
+    return events_file
+
+# Add another copy function for the Unified Job Table.  
 
