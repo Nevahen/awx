@@ -39,6 +39,7 @@ def config(since):
         'license_type': license_info.get('license_type', 'UNLICENSED'),
         'free_instances': license_info.get('free instances', 0),
         'license_expiry': license_info.get('time_remaining', 0),
+        'pendo_tracking': settings.PENDO_TRACKING_STATE,
         'authentication_backends': settings.AUTHENTICATION_BACKENDS,
         'logging_aggregators': settings.LOG_AGGREGATOR_LOGGERS
     }
