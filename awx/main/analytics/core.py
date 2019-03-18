@@ -80,6 +80,7 @@ def gather(dest=None, module=None):
 
     if not settings.INSIGHTS_DATA_ENABLED:
         logger.exception("Insights Data not enabled. ")
+        return
 
     if module is None:
         from awx.main.analytics import collectors

@@ -62,7 +62,7 @@ def counts(since):
     ])
 
     inv_counts = dict(models.Inventory.objects.order_by().values_list('kind').annotate(Count('kind')))
-    inv_counts['normal'] = inv_counts[''] # rename '' to 'normal'
+    inv_counts['normal'] = inv_counts[''] 
     inv_counts.pop('')
     counts['inventories'] = inv_counts
     
