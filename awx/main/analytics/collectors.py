@@ -191,11 +191,16 @@ def copy_tables(since, full_path):
         return events_file
 
     events_query = '''COPY (SELECT main_jobevent.id, 
-                              main_jobevent.created, 
+                              main_jobevent.created,
+                              main_jobevent.uuid,
+                              main_jobevent.parent_uuid,
                               main_jobevent.event, 
+                              main_jobevent.event_data::json->'task_action'
                               main_jobevent.failed, 
                               main_jobevent.changed, 
                               main_jobevent.playbook, 
+                              main_jobevent.play,
+                              main_jobevent.task,
                               main_jobevent.role, 
                               main_jobevent.job_id, 
                               main_jobevent.host_id, 
@@ -208,9 +213,7 @@ def copy_tables(since, full_path):
     unified_job_query = '''COPY (SELECT DISTINCT main_unifiedjob.id, 
                                  main_unifiedjob.polymorphic_ctype_id,
                                  django_content_type.model,
-                                 main_unifiedjob.created, 
-                                 main_unifiedjob.description, 
-                                 main_unifiedjob.created_by_id, 
+                                 main_unifiedjob.created,  
                                  main_unifiedjob.name,  
                                  main_unifiedjob.unified_job_template_id, 
                                  main_unifiedjob.launch_type, 
@@ -224,9 +227,6 @@ def copy_tables(since, full_path):
                                  main_unifiedjob.finished, 
                                  main_unifiedjob.elapsed, 
                                  main_unifiedjob.job_explanation, 
-                                 main_unifiedjob.start_args, 
-                                 main_unifiedjob.result_traceback, 
-                                 main_unifiedjob.celery_task_id, 
                                  main_unifiedjob.instance_group_id
                                  FROM main_unifiedjob, django_content_type
                                  WHERE main_unifiedjob.created > {} and main_unifiedjob.polymorphic_ctype_id = django_content_type.id
