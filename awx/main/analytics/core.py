@@ -11,7 +11,6 @@ import subprocess
 from django.conf import settings
 from django.utils.encoding import smart_str
 from django.utils.timezone import now, timedelta
-from django.db import connection
 from rest_framework.exceptions import PermissionDenied
 
 from awx.main.models import Job
@@ -60,8 +59,6 @@ def gather(dest=None, module=None):
     :pararm module: the module to search for registered analytic collector
                     functions; defaults to awx.main.analytics.collectors
     """
-    import time                 # TODO: Remove this
-    start_time = time.time()    # TODO: Remove this
     
     run_now = now()
     state = TowerAnalyticsState.get_solo()
@@ -76,10 +73,6 @@ def gather(dest=None, module=None):
 
     if _valid_license() is False:
         logger.exception("Invalid License provided, or No License Provided")
-        return
-
-    if not settings.INSIGHTS_DATA_ENABLED:
-        logger.exception("Insights Data not enabled. ")
         return
 
     if module is None:
@@ -98,13 +91,7 @@ def gather(dest=None, module=None):
                     logger.exception("Could not generate metric {}.json".format(key))
                     f.close()
                     os.remove(f.name)
-
-    post_query_time = time.time()
-    print("Analytics Total Query Time --- %s seconds ---" % (post_query_time - start_time))  # TODO: Remove this
-
-    # copies Job Events data from db as a csv
-    collectors.copy_events_table(dest)
-    print("Analytics Total DB Copy Time --- %s seconds ---" % (time.time() - post_query_time))  # TODO: Remove this
+    collectors.copy_tables(since=last_run, full_path=dest)
 
     # can't use isoformat() since it has colons, which GNU tar doesn't like
     tarname = '_'.join([
@@ -117,7 +104,6 @@ def gather(dest=None, module=None):
         dest
     )
     shutil.rmtree(dest)
-    print("Analytics Total Time --- %s seconds ---" % (time.time() - start_time))  # TODO: Remove this
     return tgz
 
 
