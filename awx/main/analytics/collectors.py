@@ -64,7 +64,8 @@ def counts(since):
     ])
 
     inv_counts = dict(models.Inventory.objects.order_by().values_list('kind').annotate(Count('kind')))
-    inv_counts['normal'] = inv_counts.pop('')
+    inv_counts['normal'] = inv_counts.get('', 0)
+    inv_counts['smart'] = inv_counts.get('smart', 0)
     counts['inventories'] = inv_counts
     
     counts['active_host_count'] = models.Host.objects.active_count()   
@@ -96,9 +97,9 @@ def cred_type_counts(since):
     for cred_type in models.CredentialType.objects.annotate(num_credentials=Count(
                                                             'credentials', distinct=True)).values('name', 'id', 'managed_by_tower', 'num_credentials'):  
         counts[cred_type['id']] = {'name': cred_type['name'],
-                                'credential_count': cred_type['num_credentials'],
-                                'managed_by_tower': cred_type['managed_by_tower']
-                                }
+                                   'credential_count': cred_type['num_credentials'],
+                                   'managed_by_tower': cred_type['managed_by_tower']
+                                   }
     return counts
     
     

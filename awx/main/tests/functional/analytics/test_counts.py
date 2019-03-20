@@ -6,6 +6,7 @@ from awx.main.analytics import collectors
 
 @pytest.mark.django_db
 def test_empty():
+    print(collectors.counts(None))
     assert collectors.counts(None) == {
         "active_api_sessions": 0,
         "active_channels_sessions": 0,
@@ -13,20 +14,20 @@ def test_empty():
         "active_sessions": 0,
         "credential": 0,
         "custom_inventory_script": 0,
-        "custom_virtualenvs": 1,   # dev env ansible3
+        "custom_virtualenvs": 0,   # dev env ansible3
         "host": 0,
-        "inventory": 0,
+        'inventory': 0,
+        "inventories": {'normal': 0, 'smart': 0},
         "job_template": 0,
-        "normal_inventories": 0,
         "notification_template": 0,
         "organization": 0,
         "project": 0,
         "running_jobs": 0,
         "schedule": 0,
-        "smart_inventories": 0,
         "team": 0,
         "user": 0,
-        "workflow_job_template": 0
+        "workflow_job_template": 0,
+        'unified_job': 0
     }
 
 

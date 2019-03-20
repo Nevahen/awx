@@ -1,4 +1,3 @@
-import codecs
 import inspect
 import json
 import logging
